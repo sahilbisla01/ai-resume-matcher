@@ -314,8 +314,10 @@ def call_backend(
     if backend_dir not in sys.path:
         sys.path.insert(0, backend_dir)
     try:
+        import importlib
         import agents
         import nlp_extractor
+        importlib.reload(nlp_extractor)
         from parser import parse_resume_file, clean_jd_text
     except ImportError as e:
         raise RuntimeError(f"Could not reach backend and local modules not found: {e}")

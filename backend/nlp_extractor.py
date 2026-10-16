@@ -26,8 +26,12 @@ import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 
-import spacy
-from spacy.matcher import PhraseMatcher
+try:
+    import spacy
+    from spacy.matcher import PhraseMatcher
+except Exception:
+    spacy = None
+    PhraseMatcher = None
 
 logger = logging.getLogger(__name__)
 
@@ -103,18 +107,55 @@ class BaselineScore:
     missing_skills: list[str] = field(default_factory=list)
 
 
+_STOPWORDS = {
+    "a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are",
+    "aren't", "as", "at", "be", "because", "been", "before", "being", "below", "between", "both",
+    "but", "by", "can't", "cannot", "could", "couldn't", "did", "didn't", "do", "does", "doesn't",
+    "doing", "don't", "down", "during", "each", "few", "for", "from", "further", "had", "hadn't",
+    "has", "hasn't", "have", "haven't", "having", "he", "he'd", "he'll", "he's", "her", "here",
+    "here's", "hers", "herself", "him", "himself", "his", "how", "how's", "i", "i'd", "i'll", "i'm",
+    "i've", "if", "in", "into", "is", "isn't", "it", "it's", "its", "itself", "let's", "me", "more",
+    "most", "mustn't", "my", "myself", "no", "nor", "not", "of", "off", "on", "once", "only", "or",
+    "other", "ought", "our", "ours", "ourselves", "out", "over", "own", "same", "shan't", "she",
+    "she'd", "she'll", "she's", "should", "shouldn't", "so", "some", "such", "than", "that",
+    "that's", "the", "their", "theirs", "them", "themselves", "then", "there", "there's", "these",
+    "they", "they'd", "they'll", "they're", "they've", "this", "those", "through", "to", "too",
+    "under", "until", "up", "very", "was", "wasn't", "we", "we'd", "we'll", "we're", "we've", "were",
+    "weren't", "what", "what's", "when", "when's", "where", "where's", "which", "while", "who",
+    "who's", "whom", "why", "why's", "with", "won't", "would", "wouldn't", "you", "you'd", "you'll",
+    "you're", "you've", "your", "yours", "yourself", "yourselves"
+}
+
+
+def _match_terms_regex(text: str, vocabulary: list[str]) -> list[str]:
+    text_lower = f" {text.lower()} "
+    found = []
+    for term in vocabulary:
+        pattern = r"(?:^|[\s,.;:!?/()\[\]{}])" + re.escape(term.lower()) + r"(?:$|[\s,.;:!?/()\[\]{}])"
+        if re.search(pattern, text_lower):
+            found.append(term)
+    return sorted(set(found))
+
+
 @lru_cache(maxsize=1)
 def _load_nlp():
     """Load the spaCy pipeline once and cache it for the process lifetime."""
+    if spacy is None:
+        return None
     model_name = "en_core_web_sm"
     try:
         return spacy.load(model_name)
     except Exception as exc:
-        logger.warning("Could not load %s (%s). Falling back to spacy.blank('en')", model_name, exc)
-        return spacy.blank("en")
+        logger.warning("Could not load %s (%s). Falling back to blank model or regex.", model_name, exc)
+        try:
+            return spacy.blank("en")
+        except Exception:
+            return None
 
 
-def _build_matcher(nlp, vocabulary: list[str]) -> PhraseMatcher:
+def _build_matcher(nlp, vocabulary: list[str]):
+    if PhraseMatcher is None:
+        return None
     matcher = PhraseMatcher(nlp.vocab, attr="LOWER")
     patterns = [nlp.make_doc(term) for term in vocabulary]
     matcher.add("VOCAB", patterns)
@@ -123,28 +164,37 @@ def _build_matcher(nlp, vocabulary: list[str]) -> PhraseMatcher:
 
 def _match_phrases(nlp, doc, vocabulary: list[str]) -> list[str]:
     matcher = _build_matcher(nlp, vocabulary)
+    if matcher is None:
+        return []
     matches = matcher(doc)
     found = {doc[start:end].text.lower() for _, start, end in matches}
-    # Preserve canonical casing from the source vocabulary where possible.
     canonical = {term.lower(): term for term in vocabulary}
     return sorted({canonical.get(f, f) for f in found})
 
 
 def extract_entities(text: str) -> ExtractedEntities:
-    """Run the spaCy pipeline and extract skills, degrees, and experience."""
-    nlp = _load_nlp()
-    doc = nlp(text)
-
-    technical = _match_phrases(nlp, doc, TECHNICAL_SKILLS)
-    soft = _match_phrases(nlp, doc, SOFT_SKILLS)
-    degrees = _match_phrases(nlp, doc, DEGREE_TERMS)
-
+    """Run entity extraction with automatic pure-Python regex fallback."""
     years = [int(m.group(1)) for m in _YEARS_EXPERIENCE_RE.finditer(text)]
+    try:
+        nlp = _load_nlp()
+        if nlp is not None and PhraseMatcher is not None:
+            doc = nlp(text)
+            technical = _match_phrases(nlp, doc, TECHNICAL_SKILLS)
+            soft = _match_phrases(nlp, doc, SOFT_SKILLS)
+            degrees = _match_phrases(nlp, doc, DEGREE_TERMS)
+            return ExtractedEntities(
+                technical_skills=technical,
+                soft_skills=soft,
+                degrees=degrees,
+                years_experience=years,
+            )
+    except Exception as exc:
+        logger.warning("spaCy extraction exception: %s. Using regex fallback.", exc)
 
     return ExtractedEntities(
-        technical_skills=technical,
-        soft_skills=soft,
-        degrees=degrees,
+        technical_skills=_match_terms_regex(text, TECHNICAL_SKILLS),
+        soft_skills=_match_terms_regex(text, SOFT_SKILLS),
+        degrees=_match_terms_regex(text, DEGREE_TERMS),
         years_experience=years,
     )
 
@@ -161,15 +211,22 @@ def _tokenize_for_overlap(nlp, text: str) -> set[str]:
 def compute_baseline_score(resume_text: str, jd_text: str) -> BaselineScore:
     """
     Compute a fast, deterministic baseline score combining:
-      - Jaccard token overlap (lemmatized, stopwords removed) across the
-        full resume vs. JD text.
-      - Weighted overlap of extracted technical + soft skill keywords,
-        which is a stronger signal for ATS-style matching than raw tokens.
+      - Jaccard token overlap across full resume vs. JD text.
+      - Weighted overlap of extracted technical + soft skill keywords.
     """
-    nlp = _load_nlp()
+    resume_tokens: set[str] = set()
+    jd_tokens: set[str] = set()
+    try:
+        nlp = _load_nlp()
+        if nlp is not None:
+            resume_tokens = _tokenize_for_overlap(nlp, resume_text)
+            jd_tokens = _tokenize_for_overlap(nlp, jd_text)
+    except Exception:
+        pass
 
-    resume_tokens = _tokenize_for_overlap(nlp, resume_text)
-    jd_tokens = _tokenize_for_overlap(nlp, jd_text)
+    if not resume_tokens or not jd_tokens:
+        resume_tokens = set(re.findall(r"\b[a-zA-Z]{3,}\b", resume_text.lower())) - _STOPWORDS
+        jd_tokens = set(re.findall(r"\b[a-zA-Z]{3,}\b", jd_text.lower())) - _STOPWORDS
 
     if jd_tokens:
         intersection = resume_tokens & jd_tokens
@@ -201,6 +258,8 @@ def compute_baseline_score(resume_text: str, jd_text: str) -> BaselineScore:
 
 
 def warm_up() -> None:
-    """Force-load the spaCy model at startup so the first request isn't slow."""
-    _load_nlp()
-    logger.info("spaCy model loaded and ready.")
+    """Force-load the spaCy model at startup."""
+    try:
+        _load_nlp()
+    except Exception:
+        pass
