@@ -108,18 +108,16 @@ def _load_nlp():
     """Load the spaCy pipeline once and cache it for the process lifetime."""
     model_name = "en_core_web_sm"
     try:
-        nlp = spacy.load(model_name)
-    except OSError:
-        logger.info("Downloading %s model on the fly...", model_name)
+        return spacy.load(model_name)
+    except Exception:
+        logger.info("Attempting to load or download %s model...", model_name)
         try:
-            import spacy.cli
-            spacy.cli.download(model_name)
-            nlp = spacy.load(model_name)
+            import spacy.cli as spacy_cli
+            spacy_cli.download(model_name)
+            return spacy.load(model_name)
         except Exception as exc:
-            raise RuntimeError(
-                f"spaCy model '{model_name}' could not be loaded or downloaded: {exc}"
-            ) from exc
-    return nlp
+            logger.warning("Could not load %s (%s). Falling back to spacy.blank('en')", model_name, exc)
+            return spacy.blank("en")
 
 
 def _build_matcher(nlp, vocabulary: list[str]) -> PhraseMatcher:
@@ -160,7 +158,7 @@ def extract_entities(text: str) -> ExtractedEntities:
 def _tokenize_for_overlap(nlp, text: str) -> set[str]:
     doc = nlp(text.lower())
     return {
-        tok.lemma_
+        (tok.lemma_ if tok.lemma_ else tok.text.lower())
         for tok in doc
         if not tok.is_stop and not tok.is_punct and not tok.is_space and len(tok.text) > 2
     }
