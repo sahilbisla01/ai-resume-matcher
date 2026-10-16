@@ -103,7 +103,7 @@ def resolve_provider_and_model(
             p = "groq"
 
     if p == "groq":
-        m = model if (model and "llama" in model.lower()) else DEFAULT_GROQ_MODEL
+        m = model or DEFAULT_GROQ_MODEL
         k = api_key or os.getenv("GROQ_API_KEY")
     elif p == "gemini":
         m = model if (model and "gemini" in model.lower()) else DEFAULT_GEMINI_MODEL

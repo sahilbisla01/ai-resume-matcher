@@ -276,7 +276,7 @@ def check_backend_health() -> dict | None:
     except Exception:
         pass
     # Standalone mode on Streamlit Community Cloud
-    return {"status": "ok", "mode": "standalone", "available_providers": ["groq", "gemini", "ollama"]}
+    return {"status": "ok", "mode": "standalone", "available_providers": ["groq"]}
 
 
 def call_backend(
@@ -422,30 +422,23 @@ with st.sidebar:
         st.caption("Start it with: `uvicorn app:app --reload` in backend/")
 
     st.divider()
-    st.subheader("🤖 AI Provider Settings")
+    st.subheader("⚡ AI Engine")
 
-    provider_map = {
-        "⚡ Groq - Llama 3.1 (100% Free & Ultra Fast)": "groq",
-        "🌟 Google Gemini (Free)": "gemini",
-        "💻 Local Ollama (Free & Offline)": "ollama",
-    }
-
-    selected_label = st.selectbox(
-        "Choose AI Provider",
-        options=list(provider_map.keys()),
+    selected_provider = "groq"
+    model_options = [
+        "llama-3.1-8b-instant",
+        "llama-3.3-70b-versatile",
+        "llama-3.1-70b-versatile",
+        "llama3-70b-8192",
+        "mixtral-8x7b-32768",
+    ]
+    selected_model = st.selectbox(
+        "Groq Model",
+        options=model_options,
         index=0,
-        help="Groq is 100% free & ultra-fast. Gemini and Ollama are also free."
+        help="Ultra-fast open-source LLMs hosted on Groq Cloud."
     )
-    selected_provider = provider_map[selected_label]
-
-    if selected_provider == "gemini":
-        model_options = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash"]
-    elif selected_provider == "groq":
-        model_options = ["llama-3.1-8b-instant", "llama3-70b-8192", "llama-3.1-70b-versatile", "mixtral-8x7b-32768"]
-    else:
-        model_options = ["llama3.2", "mistral", "phi-4"]
-
-    selected_model = st.selectbox("Model", options=model_options, index=0)
+    selected_label = f"Groq ({selected_model})"
     custom_api_key = None
 
     st.divider()
