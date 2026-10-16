@@ -109,15 +109,9 @@ def _load_nlp():
     model_name = "en_core_web_sm"
     try:
         return spacy.load(model_name)
-    except Exception:
-        logger.info("Attempting to load or download %s model...", model_name)
-        try:
-            import spacy.cli as spacy_cli
-            spacy_cli.download(model_name)
-            return spacy.load(model_name)
-        except Exception as exc:
-            logger.warning("Could not load %s (%s). Falling back to spacy.blank('en')", model_name, exc)
-            return spacy.blank("en")
+    except Exception as exc:
+        logger.warning("Could not load %s (%s). Falling back to spacy.blank('en')", model_name, exc)
+        return spacy.blank("en")
 
 
 def _build_matcher(nlp, vocabulary: list[str]) -> PhraseMatcher:
