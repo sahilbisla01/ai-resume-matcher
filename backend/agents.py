@@ -309,16 +309,19 @@ def _call_groq(
 
     last_error = ""
     for attempt_model in candidate_models:
+        is_json = "json" in system_prompt.lower() or "json" in user_prompt.lower()
         payload: dict[str, Any] = {
             "model": attempt_model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": 0.2,
+            "temperature": 0.1 if is_json else 0.4,
+            "frequency_penalty": 0.3,
+            "presence_penalty": 0.2,
             "max_tokens": max_tokens or MAX_TOKENS,
         }
-        if "json" in system_prompt.lower() or "json" in user_prompt.lower():
+        if is_json:
             payload["response_format"] = {"type": "json_object"}
 
         try:
@@ -753,8 +756,49 @@ STRICT GUIDELINES:
      ## CERTIFICATIONS & ACHIEVEMENTS (if present)
    - Use standard `- ` for bullet points.
    - DO NOT use tables, columns, or emojis that break ATS parsing.
+6. STRICT NON-REPETITION (CRITICAL):
+   - Every section must appear EXACTLY ONCE.
+   - Follow this order strictly and once only:
+     1. # Candidate Name & Contact Info
+     2. ## PROFESSIONAL SUMMARY
+     3. ## TECHNICAL SKILLS
+     4. ## TECHNICAL PROJECTS
+     5. ## EXPERIENCE (or RELEVANT ACTIVITIES)
+     6. ## EDUCATION
+   - Do NOT repeat or loop section headings. Once you write Education, STOP generation immediately.
    - Return ONLY the upgraded resume text in markdown format. No conversational filler or introductory remarks.
 """
+
+
+def _deduplicate_resume_sections(text: str) -> str:
+    """Detect and truncate any repetitive section generation loop if the LLM repeats itself."""
+    lines = text.splitlines()
+    seen_sections = set()
+    cleaned: list[str] = []
+
+    section_keywords = [
+        "professional summary", "summary",
+        "technical skills", "skills",
+        "education", "academic background",
+        "projects", "technical projects", "key projects",
+        "experience", "technical experiences", "work experience",
+        "certifications", "achievements", "leadership",
+    ]
+
+    for line in lines:
+        stripped = line.strip()
+        norm = re.sub(r"^[#\s\-*]+", "", stripped).lower().strip()
+        is_heading = (stripped.startswith("#") or (stripped.isupper() and len(stripped) < 40)) and any(norm.startswith(pat) for pat in section_keywords)
+
+        if is_heading:
+            matched_pat = next((pat for pat in section_keywords if norm.startswith(pat)), norm)
+            if matched_pat in seen_sections:
+                # LLM started looping on sections — truncate here
+                break
+            seen_sections.add(matched_pat)
+        cleaned.append(line)
+
+    return "\n".join(cleaned).strip()
 
 
 def run_full_resume_upgrader(
@@ -768,9 +812,9 @@ def run_full_resume_upgrader(
     user_prompt = (
         f"### TARGET JOB DESCRIPTION:\n{jd_text.strip()}\n\n"
         f"### CANDIDATE CURRENT RESUME:\n{resume_text.strip()}\n\n"
-        "Generate the complete, upgraded, ATS-optimized resume now."
+        "Generate the complete, upgraded, ATS-optimized resume now in a single clean pass without repeating sections."
     )
-    return _call_llm(
+    raw = _call_llm(
         FULL_RESUME_UPGRADER_SYSTEM_PROMPT,
         user_prompt,
         provider=provider,
@@ -778,6 +822,7 @@ def run_full_resume_upgrader(
         api_key=api_key,
         max_tokens=4096,
     )
+    return _deduplicate_resume_sections(raw)
 
 
 

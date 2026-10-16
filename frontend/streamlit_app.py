@@ -318,6 +318,7 @@ def call_backend(
         import agents
         import nlp_extractor
         importlib.reload(nlp_extractor)
+        importlib.reload(agents)
         from parser import parse_resume_file, clean_jd_text
     except ImportError as e:
         raise RuntimeError(f"Could not reach backend and local modules not found: {e}")
