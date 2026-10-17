@@ -476,7 +476,19 @@ async def match_endpoint(
     )
 
 
+@app.get("/sample")
+async def get_sample():
+    """Returns sample resume and job description text for quick testing."""
+    from sample_data import SAMPLE_JD_TEXT, SAMPLE_RESUME_TEXT
+    return {
+        "job_description": SAMPLE_JD_TEXT,
+        "resume_text": SAMPLE_RESUME_TEXT,
+        "filename": "sample_resume.docx",
+    }
+
+
 if __name__ == "__main__":
+
     import uvicorn
 
     uvicorn.run(

@@ -1,0 +1,30 @@
+Job Title: Senior Full-Stack Python & AI Engineer
+Company: CloudScale AI Solutions
+Location: Remote / Hybrid
+Job Type: Full-Time
+
+About the Role:
+CloudScale AI is seeking a talented Senior Full-Stack Python & AI Engineer to build scalable, AI-powered web applications and high-throughput microservices. In this role, you will work cross-functionally with product and machine learning teams to design robust backend architectures, integrate Large Language Models (LLMs), and create responsive web interfaces.
+
+Key Responsibilities:
+- Design, build, and deploy production-grade REST APIs and microservices using Python, FastAPI, and PostgreSQL.
+- Architect and integrate Generative AI capabilities, including LLM orchestration, RAG (Retrieval Augmented Generation), and vector database integrations.
+- Develop modern, responsive frontend interfaces using React, TypeScript, and Tailwind CSS.
+- Optimize database queries, indexing, and caching layers with Redis and PostgreSQL to maintain sub-100ms response times.
+- Containerize services with Docker and manage deployment pipelines using CI/CD and AWS (ECS, Lambda, S3, RDS).
+- Participate in code reviews, technical architecture sessions, and mentor junior engineers in an Agile/Scrum environment.
+
+Requirements & Qualifications:
+- 4+ years of professional software engineering experience with Python and web frameworks (FastAPI or Django).
+- Strong proficiency in SQL database design and query optimization (PostgreSQL).
+- Experience building single-page web applications with React, TypeScript, and modern state management.
+- Hands-on experience with containerization using Docker and orchestrating deployments via CI/CD pipelines (GitHub Actions or GitLab CI).
+- Cloud platform experience with AWS (ECS, EC2, S3, RDS, CloudWatch).
+- Familiarity with caching systems such as Redis.
+- Solid understanding of Git, version control workflows, and Agile development practices.
+
+Preferred / Nice-to-Have Skills:
+- Experience with Generative AI, Prompt Engineering, OpenAI/Anthropic APIs, and RAG architectures.
+- Experience with Kubernetes or Terraform for Infrastructure as Code.
+- Familiarity with message brokers such as Kafka or RabbitMQ.
+- Bachelor's or Master's degree in Computer Science or a related technical discipline.

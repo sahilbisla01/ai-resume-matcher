@@ -25,6 +25,15 @@ try:
 except ImportError:
     generate_docx_bytes = None
 
+try:
+    from sample_data import SAMPLE_JD_TEXT, SAMPLE_RESUME_TEXT, get_sample_docx_bytes, ensure_samples_dir
+    ensure_samples_dir()
+except Exception:
+    SAMPLE_JD_TEXT = ""
+    SAMPLE_RESUME_TEXT = ""
+    get_sample_docx_bytes = None
+    ensure_samples_dir = None
+
 load_dotenv()
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
@@ -36,6 +45,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
 
 # ---------------------------------------------------------------------------
 # Styling
@@ -247,6 +257,10 @@ if "resume_name" not in st.session_state:
     st.session_state.resume_name = None
 if "upgraded_resume" not in st.session_state:
     st.session_state.upgraded_resume = None
+if "cover_letter" not in st.session_state:
+    st.session_state.cover_letter = None
+if "jd_textarea" not in st.session_state:
+    st.session_state.jd_textarea = ""
 
 
 # ---------------------------------------------------------------------------
@@ -476,6 +490,36 @@ st.markdown(
 # Side-by-side input: Resume upload (left) / JD text (right)
 # ---------------------------------------------------------------------------
 
+# Sample / Demo pre-loader bar
+demo_col1, demo_col2 = st.columns([2.5, 1])
+with demo_col1:
+    load_demo_clicked = st.button(
+        "✨ Load Sample Resume & Job Description (1-Click Demo)",
+        use_container_width=True,
+        help="Loads pre-configured Senior Full-Stack Python & AI Engineer profile for instant ATS testing.",
+    )
+    if load_demo_clicked:
+        if get_sample_docx_bytes:
+            st.session_state.resume_bytes = get_sample_docx_bytes()
+            st.session_state.resume_name = "sample_resume.docx"
+        st.session_state.jd_textarea = SAMPLE_JD_TEXT
+        st.session_state.match_result = None
+        st.session_state.cover_letter = None
+        st.session_state.upgraded_resume = None
+        st.rerun()
+
+with demo_col2:
+    if st.button("🔄 Reset to Blank", use_container_width=True):
+        st.session_state.resume_bytes = None
+        st.session_state.resume_name = None
+        st.session_state.jd_textarea = ""
+        st.session_state.match_result = None
+        st.session_state.cover_letter = None
+        st.session_state.upgraded_resume = None
+        st.rerun()
+
+st.markdown("<div style='margin-bottom:0.75rem;'></div>", unsafe_allow_html=True)
+
 left, right = st.columns(2, gap="large")
 
 with left:
@@ -483,19 +527,23 @@ with left:
     uploaded_file = st.file_uploader(
         "Upload your resume (PDF or Word DOCX)",
         type=["pdf", "docx"],
-        help="Supports PDF and DOCX files (up to 10MB).",
+        help="Supports PDF and DOCX files (up to 10MB). Or click 'Load Sample Resume' above.",
     )
     if uploaded_file is not None:
         st.session_state.resume_bytes = uploaded_file.getvalue()
         st.session_state.resume_name = uploaded_file.name
         st.success(f"Loaded: {uploaded_file.name} ({len(st.session_state.resume_bytes) / 1024:.0f} KB)")
+    elif st.session_state.resume_bytes:
+        st.info(f"📋 **Active Resume:** `{st.session_state.resume_name}` ({len(st.session_state.resume_bytes) / 1024:.0f} KB)")
 
 with right:
     st.subheader("🧾 Job Description")
     jd_text = st.text_area(
         "Paste the target job description",
+        value=st.session_state.jd_textarea,
         height=280,
-        placeholder="Paste the full job description text here...",
+        placeholder="Paste the full job description text here, or click '✨ Load Sample Resume & Job Description' above...",
+        key="jd_textarea",
     )
 
 st.divider()
@@ -510,13 +558,16 @@ if clear_clicked:
     st.session_state.match_result = None
     st.session_state.cover_letter = None
     st.session_state.upgraded_resume = None
+    st.session_state.resume_bytes = None
+    st.session_state.resume_name = None
+    st.session_state.jd_textarea = ""
     st.rerun()
 
 if run_clicked:
     if not st.session_state.resume_bytes:
-        st.error("Please upload a resume (PDF or DOCX) first.")
+        st.error("Please upload a resume (PDF or DOCX) or click '✨ Load Sample Resume & Job Description'.")
     elif not jd_text or not jd_text.strip():
-        st.error("Please paste a job description.")
+        st.error("Please paste a job description or click '✨ Load Sample Resume & Job Description'.")
     elif not health:
         st.error("Backend is unreachable. Start the FastAPI server and try again.")
     else:
