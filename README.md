@@ -4,7 +4,7 @@
 
 **Scan your resume against any Job Description, uncover skill gaps, rewrite bullets with Google's X-Y-Z formula, and export an ATS 90+ Word document in 1-click.**
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://sahilbisla01-ai-resume-matcher-frontendstreamlit-app-7kcmcr.streamlit.app/)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://resume-ai-matcher.streamlit.app/)
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Groq LPU](https://img.shields.io/badge/Powered%20By-Groq%20LPU%20(Llama%203.1)-F05A28?logo=groq&logoColor=white)](https://groq.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
