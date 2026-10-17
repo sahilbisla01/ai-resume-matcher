@@ -857,10 +857,12 @@ if result:
         if parse["warnings"]:
             st.warning("\n".join(parse["warnings"]))
         ent = parse["entities"]
-        st.write("**Technical skills detected:**", ", ".join(ent["technical_skills"]) or "None")
-        st.write("**Soft skills detected:**", ", ".join(ent["soft_skills"]) or "None")
-        st.write("**Degrees detected:**", ", ".join(ent["degrees"]) or "None")
-        st.write("**Years of experience mentioned:**", ent["years_experience"] or "None")
+        exp_list = ent.get("years_experience", []) or []
+        exp_str = ", ".join(f"{y} years" for y in exp_list) if exp_list else "None"
+        st.write("**Technical skills detected:**", ", ".join(ent.get("technical_skills", [])) or "None")
+        st.write("**Soft skills detected:**", ", ".join(ent.get("soft_skills", [])) or "None")
+        st.write("**Degrees detected:**", ", ".join(ent.get("degrees", [])) or "None")
+        st.write(f"**Years of experience mentioned:** {exp_str}")
         st.text_area("Cleaned resume text", parse["cleaned_text"], height=300)
 
 else:
