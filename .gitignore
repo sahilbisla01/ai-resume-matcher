@@ -24,3 +24,11 @@ ENV/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Temporary test scripts
+create_sample_docx.py
+test_match_cli.py
+sample_job_description.txt
+sample_resume.txt
+run.bat
+
