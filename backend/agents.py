@@ -442,10 +442,10 @@ def _call_llm(
         raise AgentError(f"Unknown LLM provider: {p}")
 
 
-def _extract_json(raw_text: str) -> dict[str, Any]:
+def _extract_json(raw_text: str) -> Any:
     """
     Defensively parse JSON out of an LLM response, tolerating:
-      - Clean JSON
+      - Clean JSON objects or arrays
       - JSON wrapped in ```json ... ``` markdown fences
       - Leading/trailing prose the model added despite instructions
     """
@@ -463,16 +463,26 @@ def _extract_json(raw_text: str) -> dict[str, Any]:
         except json.JSONDecodeError:
             pass
 
-    # Last resort: find the outermost { ... } span.
-    start, end = text.find("{"), text.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        candidate = text[start : end + 1]
+    # Find outermost object { ... }
+    start_brace, end_brace = text.find("{"), text.rfind("}")
+    if start_brace != -1 and end_brace != -1 and end_brace > start_brace:
+        candidate = text[start_brace : end_brace + 1]
         try:
             return json.loads(candidate)
-        except json.JSONDecodeError as exc:
-            raise AgentError(f"Could not parse JSON from model response: {exc}") from exc
+        except json.JSONDecodeError:
+            pass
+
+    # Find outermost array [ ... ]
+    start_bracket, end_bracket = text.find("["), text.rfind("]")
+    if start_bracket != -1 and end_bracket != -1 and end_bracket > start_bracket:
+        candidate = text[start_bracket : end_bracket + 1]
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
 
     raise AgentError("Model response did not contain any JSON.")
+
 
 
 # ---------------------------------------------------------------------------
@@ -547,22 +557,45 @@ class ATSEvaluation:
     raw_response: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ATSEvaluation":
+    def from_dict(cls, data: Any) -> "ATSEvaluation":
+        if isinstance(data, list):
+            if data and isinstance(data[0], dict):
+                data = data[0]
+            else:
+                data = {}
+        elif not isinstance(data, dict):
+            data = {}
+
         score = data.get("ats_score", 0)
         try:
             score = max(0, min(100, int(score)))
         except (TypeError, ValueError):
             score = 0
+
+        def _clean_str_list(val: Any) -> list[str]:
+            if not val:
+                return []
+            if isinstance(val, list):
+                res = []
+                for x in val:
+                    if isinstance(x, (list, tuple)):
+                        res.extend(str(i) for i in x if i)
+                    elif x:
+                        res.append(str(x))
+                return res
+            return [str(val)]
+
         return cls(
             ats_score=score,
             score_rationale=str(data.get("score_rationale", "")),
-            critical_missing_hard_skills=list(data.get("critical_missing_hard_skills", []) or []),
-            critical_missing_soft_skills=list(data.get("critical_missing_soft_skills", []) or []),
-            matched_strengths=list(data.get("matched_strengths", []) or []),
-            formatting_red_flags=list(data.get("formatting_red_flags", []) or []),
+            critical_missing_hard_skills=_clean_str_list(data.get("critical_missing_hard_skills", [])),
+            critical_missing_soft_skills=_clean_str_list(data.get("critical_missing_soft_skills", [])),
+            matched_strengths=_clean_str_list(data.get("matched_strengths", [])),
+            formatting_red_flags=_clean_str_list(data.get("formatting_red_flags", [])),
             overall_recommendation=str(data.get("overall_recommendation", "")),
-            raw_response=data,
+            raw_response=data if isinstance(data, dict) else {},
         )
+
 
 
 def run_ats_evaluator(
@@ -651,18 +684,51 @@ class BulletTailoringResult:
     tailored_bullets: list[TailoredBullet] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "BulletTailoringResult":
+    def from_dict(cls, data: Any) -> "BulletTailoringResult":
         bullets = []
-        for item in data.get("tailored_bullets", []) or []:
-            bullets.append(
-                TailoredBullet(
-                    original=str(item.get("original", "")),
-                    rewritten=str(item.get("rewritten", "")),
-                    jd_keywords_used=list(item.get("jd_keywords_used", []) or []),
-                    improvement_rationale=str(item.get("improvement_rationale", "")),
-                )
+        if isinstance(data, list):
+            raw_bullets = data
+        elif isinstance(data, dict):
+            raw_bullets = (
+                data.get("tailored_bullets")
+                or data.get("bullets")
+                or data.get("rewrites")
+                or data.get("tailored")
+                or []
             )
+        else:
+            raw_bullets = []
+
+        for item in raw_bullets:
+            if isinstance(item, dict):
+                bullets.append(
+                    TailoredBullet(
+                        original=str(item.get("original", item.get("before", item.get("old", "")))),
+                        rewritten=str(item.get("rewritten", item.get("after", item.get("new", item.get("rewrite", ""))))),
+                        jd_keywords_used=[str(k) for k in (item.get("jd_keywords_used") or item.get("keywords") or []) if k],
+                        improvement_rationale=str(item.get("improvement_rationale", item.get("rationale", item.get("explanation", "")))),
+                    )
+                )
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                bullets.append(
+                    TailoredBullet(
+                        original=str(item[0]),
+                        rewritten=str(item[1]),
+                        jd_keywords_used=[str(x) for x in item[2]] if (len(item) > 2 and isinstance(item[2], (list, tuple))) else [],
+                        improvement_rationale=str(item[3]) if len(item) > 3 else (str(item[2]) if len(item) > 2 and isinstance(item[2], str) else ""),
+                    )
+                )
+            elif isinstance(item, str):
+                bullets.append(
+                    TailoredBullet(
+                        original=item,
+                        rewritten=item,
+                        jd_keywords_used=[],
+                        improvement_rationale="Tailored bullet point.",
+                    )
+                )
         return cls(tailored_bullets=bullets)
+
 
 
 def run_bullet_tailor(
